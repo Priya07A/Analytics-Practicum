@@ -1,6 +1,6 @@
 ## North Point Software Listing Company
 
-### North Point Software Listing Company Dataset File: [Click Here:](https://github.com/Mahendra710/Analytical-Practicum/blob/main/North-Point%20List.csv)
+### North Point Software Listing Company Dataset File: [Click Here:](https://github.com/Priya07A/Analytics-Practicum/blob/main/North-Point%20List.csv)
 ```
 # Load the necessary packages
 library(readr)
