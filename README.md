@@ -62,8 +62,11 @@ library(e1071)
 North-point is a software company that sells games and educational software. In the beginning they manufactured their own software but currently they include other products apart from their own products. Additionally, North- point just joined a consortium by adding a 200,000-customer list. This is to pick out another 200,000 customers from the pool which has 500,000 customer list.
 	North-Point selected 20,000 people and ran a test by mailing all the customers. This is to see how many customers are purchasing. Out of these 20,000 only 5.3%, that is 1,060 customers bought the products. For further analysis they took a list of 1000 purchasers and 1000 non- purchasers. Using this data, they want to predict estimated gross profit by adjusting the rate back by multiplying 0.106 with each case for the expected spending.
 
+<div align="center">
+ <img  alt="Picture1" style="max-width:100%;" src="https://github.com/Priya07A/Analytics-Practicum/assets/170826083/8d85fe8e-da82-4a4c-8126-4b631a003808">
+    <p><b>Figure 2.2.1:</b> First Six Rows and dimension of the data</p>
+</div>
 
- <img width="417" alt="Picture1" src="https://github.com/Priya07A/Analytics-Practicum/assets/170826083/8d85fe8e-da82-4a4c-8126-4b631a003808">
 
 #### Business Problem:
 Optimize the process of customer classification to get the probability to identify the potential customers and enhance customer targeting strategy for North Point Software Company. This is achieved by developing models for customer classification as purchasers (1) or non-purchasers (0) and then predicting how much each purchaser spends. Then comparing the performances of different machine learning models and evaluating them. Also attempt to answer a few business questions that arise in further stages. Finally, providing some recommendations to North-Point on their customer classification and targeting methods. Also, to estimate the gross profit that the firm could expect from the remaining 180,000 observations (customers) if it selects them randomly from the pool. This involves calculating the potential revenue generated from purchases made by these customers and comparing it to the cost of mailing, which is $2 per customer, to determine the net profit.
