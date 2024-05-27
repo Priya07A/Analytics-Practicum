@@ -87,10 +87,49 @@ Spending Prediction Model: For customers identified as potential purchasers, pre
 -	**Address_is_res**: Address type.
 -	**Purchase**: If 1 then customer responded to the mail and bought. If 0 no response to mail.
 -	**Spending**: Represents the amount of dollars spent if the customer purchased.
+•	2000 rows with 25 columns. The dataset has a 2000 number of customer lists and the data from which they are sourced from. The dataset contains information such as, if the customer is male or female, is from US or not, how many days ago they were active, has made purchases from the web, how many dollars spent etc.
+ 
+Table 6.2 Dimension of dataset
+•	First 6 rows of the data: US, source(a-w), web order, gender= male, Address_is_res, Purchase are all categorical variables with binary representation (0/1). The remaining are numerical variables which represent values.
+ 
+Table 6.3 Head of the dataset
+Structure of data: There are 4 numeric variables. Those are Freq, last_update_days_ago, last_update_days_ago, Spending.
+•	Remaining are categorical variables in binary. US, source a-w, Web order, Gender Male, Address is res, Purchase.
+ 
+Table 6.4 Structure of the data.
+•	Viewing Frequency for the Address_is_res.
+The table indicates that very few customers have the residential address. So, we can assume that few customers order from outside the USA, few customers who don’t have residential address and there is chance that customer might be purchasing for people in different locations. 
+ 
+Table 6.5 Count of Address_is_res.
+6.b. IDENTIFYING MISSING VALUES: 
+There are no missing values.
+ 
+Table 6.6 Identifying missing values.
+Zero values: If zero spending is possible for this case, then we can keep those rows, else we need to impute those rows with some values (maybe median, or mean (but mean is highly sensitive to outliers))
+ 
+Table 6.7 Zero values
+•	Dropping the sequence column since it is unique and represents the number of customers.
+ 
+Table 6.8 Dropping the sequence_number.
+6.c. IDENTIFYING OUTLIERS: 
+•	Box plot for Frequency:
+ 
+Figure 6.1 Boxplot of frequency
+•	Box plot for Last update days ago: The median here is slightly lower when compared to the first updated days ago. 
+ 
+Figure 6.2 Boxplot for Last update days ago
+•	Box plot for First update days ago: The median is high compared to the last update days ago.
+ 
+Figure 6.3 Box plot for First update days ago
+•	Boxplot for spending: Most of the observations fall under Quartile 3. Line represents median. No observations in quartile 1.
+ 
+Figure 6.4 Boxplot for spending
+Boxplot of Purchase status
+ 
+            Figure 6.5 Boxplot of purchase status
+There are outliers in the data. But it seems irrelevant to remove the outliers. To keep the data balanced. Important information might get lost if we remove the outliers.
 
 #### Data Exploration:
-
-
 
 
 ###  Predictors Analysis and Relevancy
