@@ -23,7 +23,7 @@ library(e1071)
 ## Table of Contents
 - [Introduction](#introduction)	
 - [1.0 Business Problem](#10-business-problems-and-goals)	
-  - [1.1 Business Problems:](#11-business-problems)	
+  - [1.1 Business Problems:](#business-problem)	
   - [1.2 Analytics Goals:](#12-analytics-goals)
 - [2.0 Data Exploration and Preprocessing](#20-data-exploration-and-preprocessing)
   - [2.1 Attributes Definition](#21-attributes-definition)
