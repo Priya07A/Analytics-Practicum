@@ -1,0 +1,657 @@
+# Loading the necessary libs
+
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(corrplot)
+library(tidyr)
+library(rpart)
+library(C50)
+library(readr)
+library(car)
+library(psych)
+library(forecast)
+library(rpart.plot)
+library(plotly)
+library(rattle)
+library(coefplot)
+library(gains)
+library(e1071)
+
+#############################################################
+# Loading the dataset
+NP <- read.csv("North-Point List.csv")
+
+#Attributes
+names(NP)
+
+# Viewing the dimension of the data frame
+dim(NP)
+
+
+# Viewing the first six rows of the data frame
+head(NP)
+
+# Viewing the summary of the data (only numerical variables)
+summary(NP)
+
+# Displaying the structure of the data
+str(NP)
+################################################################################
+
+# Viewing the frequency table for few categorical variables
+table(NP$Address_is_res)
+table(NP$Purchase)
+
+# Identifying the missing values
+missing_values <- colSums(is.na(NP))
+
+# Viewing variables with missing values
+names(missing_values[missing_values > 0])
+# No variables with any missing values
+
+# c. Checking for Zero:
+# Checking if any important variables such as Spending have excessive zero values
+sum(NP == 0,na.rm = TRUE)
+# If zero spending is possible for this case, then we can keep those rows, else we need to impute those rows with some values (maybe median, or mean(but mean is highly sensitive to outliers))
+
+#Dropping the sequence_number 
+NP <- NP[,-1]
+names(NP)
+
+NP$Spending[NP$Purchase==0 & NP$Spending == 1] <- 0
+####################################################################################################################################################################
+# Identifying outliers (if any)
+# Visualizing outliers in Spending using boxplot
+ggplot(NP, aes(y = Freq)) +
+  geom_boxplot(color = "black") +
+  labs(title = "Boxplot of frequnecy", y = "Frequency")
+
+ggplot(NP, aes(y = last_update_days_ago)) +
+  geom_boxplot(color = "black") +
+  labs(title = "Boxplot of Last update days ago", y = "Last")
+
+ggplot(NP, aes(y = X1st_update_days_ago)) +
+  geom_boxplot(color = "black") +
+  labs(title = "Boxplot of First update days ago", y = "First")
+
+# plot a boxplot for 'Freq' based on 'Purchase'
+boxplot(Freq ~ Purchase, data = NP, main = "Boxplot of Purchases", xlab = "Purchase Status", ylab = "Number of Purchases", col = c("lightblue", "lightgreen"))
+
+# Spending Plot using Boxplot
+plot_2 <- boxplot(NP$Spending)
+
+# Density Plot for Frequency Distribution
+ggplot(data = NP) +
+  geom_density(aes(x = Freq))
+
+# Plotting a histogram of Spending
+ggplot(data = NP) +
+  geom_histogram(aes(x = Spending))
+
+# Plotting a scatter plot matrix of freq. vs spending
+ggplot(NP, aes(x = Freq, y = Spending)) +
+  geom_point()
+
+# Scatter plot of Spending vs Country
+plot_5 <- plot(NP$Spending, NP$US)
+
+# Bar Chart for Spending vs. Address (US or non US)
+ggplot(NP, aes(x = as.factor(US), y = Spending, fill = as.factor(US))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Bar Chart of Spending by Us/Not Us", x = "US", y = "Spending")
+
+# Bar Chart for Purchase vs. Spending
+ggplot(NP, aes(x = source_a, y = Spending)) +
+  geom_bar(stat = "identity")
+
+# Checking Imbalance in dataset
+ggplot(NP, aes(x = 1, y = Purchase, color = as.factor(Purchase))) +
+  geom_jitter()
+
+# correlation matrix
+correlation_matrix <- cor(NP[, sapply(NP, is.numeric)])
+
+# Heatmap for correlation matrix
+corrplot(correlation_matrix)
+
+# Correlation matrix plot for numeric variables
+numeric_vars <- NP %>% select(Freq, last_update_days_ago, 'X1st_update_days_ago', Spending)
+correlation_matrix <- cor(numeric_vars)
+corrplot(correlation_matrix, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+
+
+# Spending between customers with and without web orders
+ggplot(NP, aes(x = "Web order", y = Spending)) +
+  geom_boxplot() +
+  labs(title = "Impact of Web Orders on Spending", x = "Web order", y = "Spending")
+
+
+# bar plot for 'Gender=male'
+ggplot(NP, aes(x = as.factor(NP$Gender.male), fill = as.factor(NP$Purchase))) +
+  geom_bar(position = "dodge") +
+  labs(title = "bar plot of Gender vs Purchase",
+       x = "Gender",
+       y = "Count",
+       fill = "Purchase")
+
+
+# bar plot for 'Address_is_res'
+ggplot(NP, aes(x = factor(Address_is_res), fill = factor(Purchase))) +
+  geom_bar(position = "dodge") +
+  labs(title = "bar plot of Address Type vs Purchase",
+       x = "Address Type",
+       y = "Count",
+       fill = "Purchase")
+
+# stacked bar plot of US vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(US))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of US vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "US") +
+  theme_minimal()
+# stacked bar plot of Source_a vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_a))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of Source_A vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_a") +
+  theme_minimal()
+
+
+# stacked bar plot of Source_b vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_b))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_b vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_b") +
+  theme_minimal()
+
+# stacked bar plot of Source_c vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_c))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_c vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_c") +
+  theme_minimal()
+
+# stacked bar plot of Source_d vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_d))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_d vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_d") +
+  theme_minimal()
+
+# stacked bar plot of Source_e vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_e))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_e vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_e") +
+  theme_minimal()
+
+# stacked bar plot of Source_h vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_h))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_h vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_h") +
+  theme_minimal()
+
+# stacked bar plot of Source_m vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_m))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_m vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_m") +
+  theme_minimal()
+
+# stacked bar plot of Source_o vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_o))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_o vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_o") +
+  theme_minimal()
+
+# stacked bar plot of Source_r vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_r))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_r vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_r") +
+  theme_minimal()
+
+# stacked bar plot of Source_s vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_s))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_s vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_s") +
+  theme_minimal()
+
+# stacked bar plot of Source_t vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_t))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_t vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_t") +
+  theme_minimal()
+# stacked bar plot of Source_u vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_u))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_u vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_u") +
+  theme_minimal()
+# stacked bar plot of Source_p vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_p))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_p vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_p") +
+  theme_minimal()
+
+# stacked bar plot of Source_w vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_w))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_w vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_w") +
+  theme_minimal()
+
+# stacked bar plot of Source_h vs Purchase
+ggplot(NP, aes(x = factor(Purchase), fill = factor(source_x))) +
+  geom_bar(position = "fill") +
+  labs(title = "stacked bar plot of source_x vs Purchase",
+       x = "Purchase",
+       y = "Proportion",
+       fill = "source_x") +
+  theme_minimal()
+##########################################################################################
+
+#statistical test for categorical variables
+
+chisq.test(table(NP$US, NP$Purchase))
+chisq.test(table(NP$source_a, NP$Purchase))
+chisq.test(table(NP$source_c, NP$Purchase))
+chisq.test(table(NP$source_b, NP$Purchase))
+chisq.test(table(NP$source_d, NP$Purchase))
+chisq.test(table(NP$source_e, NP$Purchase))
+chisq.test(table(NP$source_m, NP$Purchase))
+chisq.test(table(NP$source_b, NP$Purchase))
+chisq.test(table(NP$source_o, NP$Purchase))
+chisq.test(table(NP$source_h, NP$Purchase))
+chisq.test(table(NP$source_r, NP$Purchase))
+chisq.test(table(NP$source_s, NP$Purchase))
+chisq.test(table(NP$source_t, NP$Purchase))
+chisq.test(table(NP$source_u, NP$Purchase))
+chisq.test(table(NP$source_p, NP$Purchase))
+chisq.test(table(NP$source_x, NP$Purchase))
+chisq.test(table(NP$source_w, NP$Purchase))
+chisq.test(table(NP$Web.order, NP$Purchase))
+chisq.test(table(NP$Gender, NP$Purchase))
+
+###############################################################################
+
+# Checking Imbalance in dataset
+ggplot(NP, aes(x = 1, y = Purchase, color = as.factor(Purchase))) +
+  geom_jitter()
+
+
+# Dimension Reduction
+str(data)
+###############################################################################
+# applying principle component analysis on data
+
+library(factoextra)
+pcs <- prcomp(NP, scale = TRUE)
+summary(pcs)
+plot(pcs)
+fviz_eig(pcs, 
+         addlabels = TRUE,
+         ylim = c(0, 14), col = 'blue',
+         main="PCA plot")
+###############################################################################
+#vif values to check multi collinearity
+
+car::vif(lm(Purchase ~ ., data = NP))
+
+#####################################################################################################################
+
+#Classification models
+
+#K-NN
+NP <- read_csv("North-Point List.csv")
+NP <- NP[-1]
+
+set.seed(1)
+
+total_rows <- nrow(NP)
+p_index <- sample(1:nrow(NP))
+train <- round(0.4 * total_rows)
+validation <- round(0.35 * total_rows)
+holdout <- round(0.25*total_rows)
+
+training_set <- NP[p_index[1:train], ]
+validation_set <- NP[p_index[(train + 1):(train + validation)], ]
+holdout_set <- NP[p_index[(train + validation + 1):(train + validation + holdout)], ]
+
+
+knnmodel1 <- train(Purchase ~ ., data=training_set[,-24],#ignoring spending
+                   method="knn",  # specify the model
+                   preProcess=c("center", "scale"),  # normalize data
+                   tuneGrid=expand.grid(k=29),levels = c("0", "1"),
+                   trControl=trainControl(method="none"))
+
+predknn <- predict(knnmodel1, validation_set[,-24],type = "raw")
+confusionMatrix(as.factor(as.numeric(predknn>0.5)), as.factor(validation_set$Purchase), positive="1")
+
+
+#Trying with different k values
+knnmodel2 <- train(Purchase ~ ., data=training_set[,-24],
+                   method="knn",  # specify the model
+                   preProcess=c("center", "scale"),  # normalize data
+                   tuneGrid=expand.grid(k=35),levels = c("0", "1"),
+                   trControl=trainControl(method="none"))
+
+predknn <- predict(knnmodel2, validation_set[,-24],type = "raw")
+confusionMatrix(as.factor(as.numeric(predknn>0.5)), as.factor(validation_set$Purchase), positive="1")
+
+
+knnmodel3 <- train(Purchase ~ ., data=training_set[,-24],
+                   method="knn",  # specify the model
+                   preProcess=c("center", "scale"),  # normalize data
+                   tuneGrid=expand.grid(k=45),levels = c("0", "1"),
+                   trControl=trainControl(method="none"))
+
+predknn <- predict(knnmodel3, validation_set[,-24],type = "raw")
+confusionMatrix(as.factor(as.numeric(predknn>0.5)), as.factor(validation_set$Purchase), positive="1")
+
+#determining best K - value determining
+trControl <- trainControl(method="loocv", number=5, allowParallel=TRUE)
+model <- train(Purchase ~ ., data=training_set[,-24],
+               method="knn",
+               preProcess=c("center", "scale"),
+               tuneGrid=expand.grid(k=seq(15, 47, 2)),
+               trControl=trControl)
+model
+########################################################################################################################
+#Logistic Regression
+
+training_set$Purchase <- factor(training_set$Purchase, levels=c(0,1),labels=c('No','Yes'))
+validation_set$Purchase <- factor(validation_set$Purchase, levels=c(0,1),labels=c('No','Yes'))
+
+predictors <- setdiff(names(training_set), c("Spending"))
+
+#Logistic Regression model
+trControl <- caret::trainControl(method="cv", number=5, allowParallel=TRUE)
+logreg.reg <- caret::train(Purchase ~ ., data= training_set[, predictors],trControl=trControl,
+                           method="glm", family="binomial")
+logreg.reg
+summary(logreg.reg$finalModel)
+options(scrippen = 999)
+
+#evaluating performance of training data
+confusionMatrix(predict(logreg.reg, training_set[, predictors]), training_set$Purchase,positive = "Yes")
+
+#evaluating performance of Validation data
+confusionMatrix(predict(logreg.reg, validation_set[, predictors]),
+validation_set$Purchase, positive="Yes")
+
+##############################################################################################################################
+
+#stepAIC
+logreg.reg1 <- caret::train(Purchase ~ ., data=training_set[, predictors],trControl=trControl,
+                            method="glmStepAIC", # Step wise AIC
+                            family="binomial", # Logistic regression is specified
+                            direction="backward", # Backward selection
+                            trace = F,
+                            maxit=100)
+logreg.reg1
+summary(logreg.reg1$finalModel)
+options(scrippen = 999)
+
+#evaluating performance of training data
+confusionMatrix(predict(logreg.reg1, training_set[, predictors]), training_set$Purchase, positive = "Yes")
+
+#evaluating performance of Validation data
+confusionMatrix(predict(logreg.reg1, validation_set[, predictors]),
+validation_set$Purchase, positive="Yes")
+
+##############################################################################################################################
+
+#C5.0
+CT <- C5.0(Purchase ~ ., data = training_set[, predictors])
+plot(CT, method = 'simple')
+
+# Predict using the trained model on the validation data
+pred <- predict(CT, newdata = validation_set[, predictors])
+
+confusionMatrix(pred, validation_set$Purchase, positive = "Yes")
+#Trails = 10
+CT2 <- C5.0(Purchase ~ ., data = training_set[, predictors], trials= 10)
+plot(CT2, method = 'simple')
+
+# Predict using the trained model on the validation data
+pred <- predict(CT2, newdata = validation_set[, predictors])
+
+confusionMatrix(pred, validation_set$Purchase, positive = "Yes")
+
+#Trails = 7
+CT3 <- C5.0(Purchase ~ ., data = training_set[, predictors], trials=7)
+plot(CT3, method = 'simple')
+
+# Predict using the trained model on the validation data
+pred <- predict(CT3, newdata = validation_set[, predictors])
+
+confusionMatrix(pred, validation_set$Purchase, positive = "Yes")
+
+########################################################################################################
+
+#Regression models
+NP <- read_csv("North-Point List.csv")
+NP <- NP[,-1]
+
+set.seed(1)
+
+total_rows <- nrow(NP)
+p_index <- sample(1:nrow(NP))
+train <- round(0.4 * total_rows)
+validation <- round(0.35 * total_rows)
+holdout <- round(0.25*total_rows)
+
+
+training_set <- NP[p_index[1:train], ]
+validation_set <- NP[p_index[(train + 1):(train + validation)], ]
+holdout_set <- NP[p_index[(train + validation + 1):(train + validation + holdout)], ]
+
+training_set <- subset(training_set, Purchase == "1")
+validation_set <- subset(validation_set, Purchase == "1")
+
+
+# multi-linear model
+
+data_mlr <- lm(Spending~ ., training_set[,-23]) #ignoring purchase
+summary(data_mlr)
+data_pred_lm <- predict(data_mlr,validation_set[,-ncol(validation_set[,-23])])
+
+#Multi-linear regression
+summary(data_pred_lm)
+
+accuracy(data_pred_lm,validation_set$Spending)
+
+summary(validation_set$Spending)
+
+plot(data_mlr, which = 1:2)
+
+plot(data_mlr$fitted.values, data_mlr$residuals,xlab = "Predicted Values", ylab = "Residuals", main = "Predicted vs. Actual Values")
+
+
+coefplot(data_mlr)
+
+# checking if these two correlate with each other
+cor(data_pred_lm,validation_set$Spending)
+
+mse <- mean((data_pred_lm - validation_set$Spending)^2)
+mse
+
+#Stepwise Model- backward
+backward_model <- step(lm(Spending ~ ., data = training_set[,-23]), direction = "backward")
+summary(backward_model)
+
+spendings_pred_backward <- predict(backward_model,newdata = validation_set[,-23])
+
+#################################################################################################################
+#Stepwise- Backward
+summary(spendings_pred_backward)
+
+summary(validation_set$Spending)
+
+coefplot(backward_model)
+
+accuracy(spendings_pred_backward,validation_set$Spending)
+cor(spendings_pred_backward,validation_set$Spending)
+
+# str(spendings_pred_backward)
+mse <- mean((spendings_pred_backward - validation_set$Spending)^2)
+mse
+##################################################################################################################
+#Stepwise forward
+# Fit the null model (only intercept)
+null_model <- lm(Spending ~ 1, data = training_set[,-23])
+
+forward_model <- step(null_model, scope = list(lower = null_model, upper = data_mlr ), direction = "forward")
+
+summary(forward_model)
+
+coefplot(forward_model)
+
+spendings_pred_forward <- predict(forward_model , newdata = validation_set[,-23])
+summary(spendings_pred_forward)
+
+summary(validation_set$Spending)
+cor(spendings_pred_forward,validation_set$Spending)
+
+mse <- mean((spendings_pred_forward - validation_set$Spending)^2)
+mse
+#####################################################################################################################
+#Regression tree Model
+
+tree_model <- rpart(Spending ~ ., data = training_set[,-23])
+summary(tree_model)
+
+rpart.plot(tree_model, digits=3)
+rpart.plot(tree_model, digits = 4, fallen.leaves = T, type=3, extra=101)
+fancyRpartPlot(tree_model, cex = 0.8)
+
+rpart.rules(tree_model)
+
+
+# making the predictions using regression tree model
+RT <- predict(tree_model,newdata = validation_set[,-23])
+
+#Regression tree
+summary(RT)
+summary(validation_set$Spending)
+
+accuracy(RT,validation_set$Spending)
+cor(RT,validation_set$Spending)
+
+str(RT)
+mse <- mean((RT - validation_set$Spending)^2)
+mse
+
+# add the prediction from logistic regression model to the holdout dataset named predicted probability
+str(holdout_set)
+
+######################################################################################################################
+#Using Logistic  regression and Modified stepwise backward
+
+holdout_set$purchase_probability <- predict(logreg.reg, holdout_set[,-c(23,24)],type = "prob")[,"Yes"]
+holdout_set$adj_purchase_probability <- holdout_set$purchase_probability*0.1065
+
+# Using backward regression model
+
+holdout_set$predicted_spending <- predict(backward_model, holdout_set[,-c(23,24)])
+holdout_set$expected_spending <- (holdout_set$predicted_spending)*(holdout_set$adj_purchase_probability)
+
+write_csv(holdout_set, "output_file.csv")
+
+summary(holdout_set)
+colSums(holdout_set<0)
+
+# Calculate cumulative expected spending
+holdout_set <- holdout_set[order(-holdout_set$adj_purchase_probability), ]
+holdout_set$cumulative_expected_spending <- cumsum(holdout_set$expected_spending)
+write_csv(holdout_set, "output_file1.csv")
+
+####################################################################################################################
+
+# Create ggplot
+
+Spending <- holdout_set$Spending
+gain <- gains(Spending,holdout_set$expected_spending )
+
+# cumulative lift chart
+# we will compute the gain relative to Spending
+df <- data.frame(
+  ncases=c(0, gain$cume.obs),
+  cumSpending=c(0, gain$cume.pct.of.total * sum(Spending))
+)
+g1 <- ggplot(df, aes(x=ncases, y=cumSpending)) +
+  geom_line() +
+  geom_line(data=data.frame(ncases=c(0, nrow(holdout_set)), cumSpending=c(0, sum(Spending))),
+            color="gray", linetype=2) + # adds baseline
+  labs(x="# Cases", y="Cumulative Spending", title="Cumulative gains chart") +
+  scale_y_continuous(labels = scales::comma) 
+g1
+
+ggplot(holdout_set, aes(x = 1:nrow(holdout_set), y = cumulative_expected_spending)) +
+  geom_line(color = "black") +
+  labs(title = "Cumulative Gain Chart for Expected Spending",
+       x = "Records Targeted",
+       y = "Cumulative Expected Spending")
+
+#Decile-Wise Lift chart
+
+Spending <- holdout_set$Spending
+
+gain <- gains(Spending,holdout_set$expected_spending )
+df <-   df <- data.frame( percentile=gain$depth, meanResponse=gain$mean.resp / mean(Spending))
+g2 <- ggplot(df, aes(x=percentile, y=meanResponse)) + geom_bar(stat="identity") + labs(x="Percentile", y="Decile mean / global mean", title="Decile-wise lift chart")
+g2
+
+############################################################################################################################################################################
+
+#Profit analysis
+#Average expected spending
+
+A <- mean(holdout_set$expected_spending)
+A
+
+#Profit per customer
+PC <- A-2 # 2$ for spending for mail
+PC
+
+GP <- PC*180000
+GP
+
+
