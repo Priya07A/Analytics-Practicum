@@ -1,0 +1,448 @@
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(corrplot)
+library(VIM)
+library(fastDummies)
+library(Boruta)
+library(plotly)
+library(caret)
+library(coefplot)
+library(forecast)
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(neuralnet)
+library(C50)
+require(cluster)
+library(stats)
+
+###########################################
+UD <- read.csv("used_device_data.csv")
+#########################################
+names(UD)
+
+head(UD)
+str(UD)
+######################################################################
+#Missing values
+colSums(is.na(UD))
+
+# Calculate the mean rear camera for each brand
+mean_rear_camera <- sapply(unique(UD$device_brand), function(brand) {
+  mean(UD$rear_camera_mp[UD$device_brand == brand], na.rm = TRUE)
+})
+mean_rear_camera
+# Replace missing values with the mean rear camera for each brand
+UD$rear_camera_mp <- ifelse(is.na(UD$rear_camera_mp), mean_rear_camera[match(UD$device_brand, unique(UD$device_brand))], UD$rear_camera_mp)
+colSums(is.na(UD))
+
+# Replace missing values for rear_camera_mp for brand Infinix with 13
+UD <- UD %>%
+  mutate(rear_camera_mp = if_else(is.na(rear_camera_mp) & device_brand == "Infinix", 13, rear_camera_mp))
+
+colSums(is.na(UD))
+
+# Handling missing values for Front camera, Internal-Memory, ram, Battery, Weight.
+
+UD1 <- kNN(UD, imp_var = FALSE)
+colSums(is.na(UD1))
+
+###########################################################################################################
+#Identifying zero 
+numerical_variables <- c("screen_size", "rear_camera_mp", "front_camera_mp", "internal_memory", 
+                         "ram", "battery", "weight", "days_used", "normalized_used_price", 
+                         "normalized_new_price")
+colSums(UD1[, numerical_variables] == 0)
+##########################################################################################################
+# IDENTIFYING OUTLIERS
+
+# Create box plots for each numerical variable
+for (var in numerical_variables) {
+  # Create a box plot
+  plot <- ggplot(data = UD1, aes(x = "", y = .data[[var]])) +
+    geom_boxplot(fill = "skyblue", color = "blue") +
+    labs(title = paste("Box Plot of", var), x = "", y = var) +
+    theme_minimal()
+  
+  # Print the plot
+  print(plot)
+}
+
+####################################################################################################
+#summary statistics for numerical variables
+
+summary(UD1[,numerical_variables])
+
+#######################################################################################################
+# Visualization'
+
+# Explore device_brand variable
+par(mar = c(8, 4, 4, 2) + 0.1)
+
+T1 <- table(UD1$device_brand)
+
+# Create bar plot for device_brand with vertical x-axis labels
+barplot(T1, main = "Device Brand Distribution", xlab = "Device Brand", ylab = "Frequency", las = 2)
+
+# Explore release_year variable
+T2 <- table(UD1$release_year)
+
+# Create bar plot for release_year
+barplot(T2, main = "Release Year Distribution", xlab = "Release Year", ylab = "Frequency")
+
+# Explore days_used variable
+ggplot(UD1, aes(x = days_used)) +
+  geom_density(fill = "skyblue", color = "blue") +
+  labs(title = "Density Plot of Days Used", x = "Days Used", y = "Density") +
+  theme_minimal()
+
+# Explore normalized_used_price variable
+ggplot(UD1, aes(x = normalized_used_price)) +
+  geom_density(fill = "skyblue", color = "blue") +
+  labs(title = "Density Plot of Normalized Used Price", x = "Normalized Used Price", y = "Density") +
+  theme_minimal()
+
+# Explore normalized_new_price variable
+ggplot(UD1, aes(x = normalized_new_price)) +
+  geom_density(fill = "skyblue", color = "blue") +
+  labs(title = "Density Plot of Normalized New Price", x = "Normalized New Price", y = "Density") +
+  theme_minimal()
+
+# Explore rear_camera_mp variable
+ggplot(UD1, aes(x = rear_camera_mp)) +
+  geom_histogram(binwidth = 2, fill = "skyblue", color = "blue") +
+  labs(title = "Histogram of Rear Camera Megapixels", x = "Rear Camera Megapixels", y = "Frequency") +
+  theme_minimal()
+
+# Explore internal_memory variable
+ggplot(UD1, aes(x = internal_memory)) +
+  geom_histogram(binwidth = 32, fill = "skyblue", color = "blue") +
+  labs(title = "Histogram of Internal Memory", x = "Internal Memory (GB)", y = "Frequency") +
+  theme_minimal()
+
+################################################################################################
+
+# Calculate the difference between normalized new price and normalized used price
+
+UD1$Delta <- UD1$normalized_new_price - UD1$normalized_used_price
+
+summary(UD1$Delta)
+
+# Adding a new column "Depreciation" based on whether the difference is greater than the median
+UD1$Depreciation <- ifelse(UD1$Delta > 0.84566, "High", "Low")
+
+table(UD1$Depreciation)
+
+ggplot(UD1, aes(x = 1, y = Depreciation, color = as.factor(Depreciation))) +
+  geom_jitter()
+
+#############################################################################################
+
+#Correlation
+numerical_variables <- c("screen_size", "rear_camera_mp", "front_camera_mp", "internal_memory", 
+                         "ram", "battery", "weight", "release_year","days_used", "normalized_used_price", 
+                         "normalized_new_price")
+NV <- UD1[numerical_variables]
+
+CM <- cor(NV)
+CM
+
+corrplot(CM)
+
+#################################################################################################
+#Statistical tests
+
+chisq.test(table(UD1$os, UD1$X4g))
+
+chisq.test(table(UD1$X4g, UD1$X5g))
+
+chisq.test(table(UD1$X4g, UD1$Depreciation))
+chisq.test(table(UD1$X5g, UD1$Depreciation))
+
+chisq.test(table(UD1$os, UD1$Depreciation))
+
+############################################################
+#Dimension reduction
+UD1 <- UD1[ , -c(15,16)] #Removing normalized new price and Delta 
+names(UD1)
+
+#Variable selection
+set.seed(123)
+rawData <- UD1[ , -c(4,5,15)] 
+rawData <- dummy_cols(rawData,remove_first_dummy=FALSE, remove_selected_columns=TRUE)
+
+rawData$x4g <- UD1$X4g
+rawData$x5g <- UD1$X5g
+rawData
+
+VS<-Boruta(normalized_used_price~., data=rawData, doTrace=0)
+#Takes 5.575 minutes
+print(VS)
+
+df_long <- tidyr::gather(as.data.frame(VS$ImpHistory), feature, measurement)
+
+plot_ly(df_long, y = ~measurement, color = ~feature, type = "box") %>%
+  layout(title="Box-and-whisker Plots across all variables",
+         xaxis = list(title="Features"),
+         yaxis = list(title="Importance"),
+         showlegend=F)
+final.als<-TentativeRoughFix(VS)
+print(final.als)
+final.als$finalDecision
+
+getConfirmedFormula(final.als)
+
+#########################################################################################
+#Data Transformation
+#Categorical release year
+UD1$release_year <- factor(UD1$release_year)
+
+##############
+#Data partitioning
+set.seed(123)
+total_rows <- nrow(UD1)
+p_index <- sample(1:nrow(UD1))
+
+# Calculate the exact number of rows for each set
+train <- round(0.55 * total_rows)
+validation <- round(0.25 * total_rows)
+holdout <- total_rows - train - validation  
+
+# Split the data
+train_data <- UD1[p_index[1:train], ]
+validation_data <- UD1[p_index[(train + 1):(train + validation)], ]
+holdout_data <- UD1[p_index[(train + validation + 1):(train + validation + holdout)], ]
+
+#########################################################################################################
+#Regression Models
+stepwise_model <- step(lm(normalized_used_price ~ ., data = train_data[,-15]), direction = "backward")
+
+coefplot(stepwise_model)
+summary(stepwise_model)
+
+pred <- predict(stepwise_model,newdata = validation_data[,-15])
+
+#Stepwise- Backward
+summary(pred)
+
+summary(validation_data$normalized_used_price)
+
+accuracy(pred,validation_data$normalized_used_price)
+cor(pred,validation_data$normalized_used_price)
+
+mae1 <- mean(abs(pred - validation_data$normalized_used_price))
+mae1
+##############################################################
+#Regression tree
+r_tree <- rpart(normalized_used_price ~., data = train_data[,-15])
+r_tree
+fancyRpartPlot(r_tree)
+rpart.rules(r_tree)
+
+# making the predictions using regression tree model
+pred2 <- predict(r_tree,newdata = validation_data[,-15])
+
+#Regression tree
+summary(pred2)
+summary(validation_data$normalized_used_price)
+
+cor(pred2,validation_data$normalized_used_price)
+mae2 <- mean(abs(pred2 - validation_data$normalized_used_price))
+mae2
+#####################################################################################
+#Classification- Outcome is depreciation
+
+validation_data$Depreciation <- factor(validation_data$Depreciation, levels = c("High", "Low"))
+train_data$Depreciation <- factor(train_data$Depreciation, levels = c("High", "Low"))
+
+
+trControl <- caret::trainControl(method="cv", number=5, allowParallel=TRUE)
+logreg.reg <- caret::train(Depreciation ~ ., data= train_data[, -14],trControl=trControl,
+                           method="glm", family="binomial")
+logreg.reg
+summary(logreg.reg$finalModel)
+options(scrippen = 999)
+
+#evaluating performance of Validation data
+confusionMatrix(predict(logreg.reg, validation_data[, -14]),
+                validation_data$Depreciation, positive="High")
+######################################################################################
+#C5.0
+CT <- C5.0(Depreciation ~ ., data = train_data[,-14])
+CT
+plot(CT, method = 'simple')
+
+# Predict using the trained model on the validation data
+pred <- predict(CT, newdata = validation_data[, -14])
+
+confusionMatrix(pred, validation_data$Depreciation, positive = "High")
+
+#Trails = 7
+CT3 <- C5.0(Depreciation ~ ., data = train_data[, -14], trials=7)
+CT3
+plot(CT3, method = 'simple')
+
+# Predict using the trained model on the validation data
+pred <- predict(CT3, newdata = validation_data[, -14])
+
+confusionMatrix(pred, validation_data$Depreciation, positive = "High")
+#####################################################################################
+#Building neural networks with the dummy variables and
+#Normalizing data
+
+rawData$x4g <- factor(rawData$x4g, levels = c('yes', 'no'), labels = c('1', '0'))
+rawData$x5g <- factor(rawData$x5g, levels = c('yes', 'no'), labels = c('1', '0'))
+rawData$x4g <- as.numeric(rawData$x4g)
+rawData$x5g <- as.numeric(rawData$x5g)
+
+
+normalize <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+normalized_data <- as.data.frame(lapply(rawData, normalize))
+
+#########################################################################3
+#Data partitioning
+
+set.seed(123)
+total_rows <- nrow(normalized_data)
+p_index <- sample(1:nrow(normalized_data))
+
+
+
+# Calculate the exact number of rows for each set
+train <- round(0.55 * total_rows)
+validation <- round(0.25 * total_rows)
+holdout <- total_rows - train - validation  
+
+# Split the data
+train_data <- normalized_data[p_index[1:train], ]
+validation_data <- normalized_data[p_index[(train + 1):(train + validation)], ]
+holdout_data1 <- normalized_data[p_index[(train + validation + 1):(train + validation + holdout)], ]
+
+#################################################################################################################
+
+nn <- neuralnet(normalized_used_price ~ ., data = train_data, hidden = c(5,5), stepmax = 1e6,learningrate = 0.001)
+#Takes around 2.5 minutes
+plot(nn)
+
+pred<-compute(nn, validation_data)
+pred_results<-pred$net.result
+
+summary(pred_results)
+summary(validation_data$normalized_used_price)
+
+cor(pred_results, validation_data$normalized_used_price)
+
+# Un normalize
+unnormalize <- function(x, minv, maxv) {
+  return( x * (maxv - minv) + minv )
+}
+
+UN <-unnormalize(pred_results, min(UD1$normalized_used_price), max(UD1$normalized_used_price))
+UN_actual <- unnormalize(validation_data$normalized_used_price, min(UD1$normalized_used_price), max(UD1$normalized_used_price))
+
+mae3 <- mean(abs(UN - UN_actual))
+mae3
+############################################################################################
+#Holdout data predictions
+
+# Regression
+pred<-compute(nn, holdout_data1)
+pred_results<-pred$net.result
+
+summary(pred_results)
+summary(holdout_data1$normalized_used_price)
+
+cor(pred_results, holdout_data1$normalized_used_price)
+
+# Un normalize
+unnormalize <- function(x, minv, maxv) {
+  return( x * (maxv - minv) + minv )
+}
+
+UN1 <-unnormalize(pred_results, min(UD1$normalized_used_price), max(UD1$normalized_used_price))
+UN_actual1 <- unnormalize(holdout_data1$normalized_used_price, min(UD1$normalized_used_price), max(UD1$normalized_used_price))
+
+mae4 <- mean(abs(UN1 - UN_actual1))
+mae4
+
+#Alternate model for regression
+pred5 <- predict(r_tree,newdata = holdout_data[,-15])
+
+#Regression tree
+summary(pred5)
+summary(holdout_data$normalized_used_price)
+
+cor(pred5,holdout_data$normalized_used_price)
+mae5 <- mean(abs(pred5 - holdout_data$normalized_used_price))
+mae5
+#########################################
+#classification model evaluation on holdout data
+holdout_data$Depreciation <- factor(holdout_data$Depreciation, levels = c("High", "Low"))
+pred1 <- predict(CT, newdata = holdout_data[, -14],type ='class')
+
+confusionMatrix(pred1, holdout_data$Depreciation, positive = "High")
+
+#Alternate model for classification-Logistic
+pred <- predict(logreg.reg, newdata = holdout_data[, -14],type ='raw')
+
+confusionMatrix(pred, holdout_data$Depreciation, positive = "High")
+
+##############################################################################################
+#Unsupervised- K-means clustering
+
+#Data preparation
+UD2 <- UD1[, -c(1,2,4,5,12,15)]
+names(UD2)
+
+#Rescaling the data
+C <- as.data.frame(lapply(UD2, scale))
+C
+##################################################
+#Building unsupervised ML model- 3 Clusters(K-means)
+set.seed(123)
+Un_Superv <-kmeans(C, 3)
+#########################################################################################
+#Evaluation
+Un_Superv$size
+dis = dist(C)
+sil = silhouette(Un_Superv$cluster, dis)
+summary(sil)
+Un_Superv$centers
+plot(sil, col=c(1:length(Un_Superv$size)), border = NA)
+
+myColors <- c("darkblue", "green", "brown", "pink", "purple", "yellow","blue","black",
+              "skyblue")
+barplot(t(Un_Superv$centers), beside = TRUE, xlab="cluster",ylab="value", col = myColors)
+legend("top", ncol=1, legend = c("screen_size", "rear_camera_mp", "front_camera_mp", "internal_memory",
+                                 "ram", "battery","weight", "days_used","normalized_used_price"), fill = myColors)
+############################################################################################################################
+#Usage of cluster information
+C$clusters<-Un_Superv$cluster
+ggplot(C, aes(days_used, normalized_used_price), main="Scatterplot Normalized_used_priceby days used") +
+  geom_point(aes(colour = factor(clusters), shape=factor(clusters), stroke = 8), alpha=1) + 
+  theme_bw(base_size=25) +
+  geom_text(aes(label=ifelse(clusters%in%1, as.character(clusters), ''), hjust=2, vjust=2, colour = factor(clusters)))+
+  geom_text(aes(label=ifelse(clusters%in%2, as.character(clusters), ''), hjust=-2, vjust=2, colour = factor(clusters))) +
+  geom_text(aes(label=ifelse(clusters%in%3, as.character(clusters), ''), hjust=-2, vjust=2, colour = factor(clusters))) +
+  guides(colour = guide_legend(override.aes = list(size=8))) +
+  theme(legend.position="top")
+
+clusterNames <- paste0("Cluster ", C$clusters)
+plot_ly(data = C, x = ~weight, y = ~normalized_used_price, type="scatter", mode="markers",
+        color = ~clusters, marker = list(size = 30), name=clusterNames) %>%
+  hide_colorbar()
+###############################################################################################################################
+#elbow chart
+
+mydata <- C
+wss <- sum(apply(mydata, 2, function(x) sum((x - mean(x))^2)))
+for (i in 1:10) wss[i] <- mean(kmeans(mydata, centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters (k)",
+     ylab="Average Within−Cluster Squared Distance")
+
+
+
